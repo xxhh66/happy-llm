@@ -2,12 +2,20 @@ import os
 import json
 from tqdm import tqdm
 
-# pretrain_data 为运行download_dataset.sh时，下载的pretrain_data本地路径
-pretrain_data = 'your local pretrain_data'
+# # pretrain_data 为运行download_dataset.sh时，下载的pretrain_data本地路径
+# pretrain_data = 'your local pretrain_data'
+# output_pretrain_data = 'seq_monkey_datawhale.jsonl'
+
+# # sft_data 为运行download_dataset.sh时，下载的sft_data本地路径
+# sft_data = 'your local sft_data'
+# output_sft_data = 'BelleGroup_sft.jsonl'
+
+# 预训练数据：使用小样本
+pretrain_data = './datasets/pretrain_mini.jsonl'      # 10,000行
 output_pretrain_data = 'seq_monkey_datawhale.jsonl'
 
-# sft_data 为运行download_dataset.sh时，下载的sft_data本地路径
-sft_data = 'your local sft_data'
+# SFT 数据：使用完整版
+sft_data = './datasets/BelleGroup/train_3.5M_CN.json'  # 完整版
 output_sft_data = 'BelleGroup_sft.jsonl'
 
 # 1 处理预训练数据

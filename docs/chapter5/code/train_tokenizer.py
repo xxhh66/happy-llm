@@ -33,16 +33,17 @@ def read_texts_from_jsonl(file_path: str) -> Generator[str, None, None]:
 def create_tokenizer_config(save_dir: str) -> None:
     """创建完整的tokenizer配置文件"""
     config = {
-        "add_bos_token": False,
-        "add_eos_token": False,
-        "add_prefix_space": False,
-        "bos_token": "<|im_start|>",
-        "eos_token": "<|im_end|>",
-        "pad_token": "<|im_end|>",
-        "unk_token": "<unk>",
-        "model_max_length": 1000000000000000019884624838656,
+        "add_bos_token": False,          # 不自动添加BOS token
+        "add_eos_token": False,          # 不自动添加EOS token
+        "add_prefix_space": False,       # 不加前缀空格
+        "bos_token": "<|im_start|>",     # 开始token（Qwen风格）
+        "eos_token": "<|im_end|>",       # 结束token
+        "pad_token": "<|im_end|>",       # 填充token（复用EOS）
+        "unk_token": "<unk>",            # 未知词token
+        "model_max_length": 1000000000000000019884624838656,  # 最大长度（极大值）
         "clean_up_tokenization_spaces": False,
         "tokenizer_class": "PreTrainedTokenizerFast",
+        # 对话模板：定义如何将消息列表转换为模型输入格式
         "chat_template": (
             "{% for message in messages %}"
             "{% if message['role'] == 'system' %}"
@@ -78,7 +79,8 @@ def train_tokenizer(data_path: str, save_dir: str, vocab_size: int = 8192) -> No
     """训练并保存自定义tokenizer"""
     os.makedirs(save_dir, exist_ok=True)
     
-    # 初始化tokenizer
+    # 初始化tokenizer 
+    # 使用BPE算法，未知词用<unk>表示
     tokenizer = Tokenizer(models.BPE(unk_token="<unk>"))
     tokenizer.normalizer = NFKC()  # 添加文本规范化
     tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
@@ -173,14 +175,15 @@ def eval_tokenizer(tokenizer_path: str) -> None:
 
 def main():
     # 配置路径
-    data_path = "your data path"
-    save_dir = "tokenizer_k"
+    # 分块后的数据集 seq_monkey_datawhale
+    data_path = "seq_monkey_datawhale.jsonl"
+    save_dir = "tokenizer_p"
 
     # 训练tokenizer
     train_tokenizer(
         data_path=data_path,
         save_dir=save_dir,
-        vocab_size=6144
+        vocab_size=6144 # 预训练参数要一致
     )
 
     # 评估tokenizer

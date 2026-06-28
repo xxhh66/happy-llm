@@ -37,6 +37,27 @@ from transformers.trainer_utils import get_last_checkpoint
 import swanlab
 from tqdm import tqdm
 
+path = r"D:/workspace/deeplearning/d2cv/happy-llm/docs/"
+# ==================== 配置区 ====================
+# 模型配置
+MODEL_NAME_OR_PATH = path+"autodl-tmp/qwen2.5-0.5B"  # 本地模型路径，或 HuggingFace ID: "Qwen/Qwen2.5-0.5B"
+TRAIN_DATA_PATH =path+ "dataset/BelleGroup/BelleGroup_5000.jsonl"  # 训练数据路径
+OUTPUT_DIR =path+ "autodl-tmp/sft"  # 输出目录
+
+# 训练超参数
+PER_DEVICE_TRAIN_BATCH_SIZE = 4  # 每设备 batch size（4060 建议 1）
+GRADIENT_ACCUMULATION_STEPS = 8  # 梯度累积步数
+NUM_TRAIN_EPOCHS = 10  # 训练轮数
+LEARNING_RATE = 1e-4  # 学习率
+MAX_LEN = 512  # 最大序列长度
+SAVE_STEPS = 100  # 保存间隔
+LOGGING_STEPS = 10  # 日志间隔
+WARMUP_STEPS = 200  # 预热步数
+
+# 其他配置
+SEED = 42
+REPORT_TO = "none"  # 是否使用 wandb/swanlab
+# ==============================================
 
 logger = logging.getLogger(__name__)
 
@@ -231,92 +252,83 @@ class SupervisedDataset(Dataset):
 
                 
 def main():
-
-    # 加载脚本参数
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
-    # 初始化 SwanLab
-    swanlab.init(project="sft", experiment_name="qwen-1.5b")
-    
     # 设置日志
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+    logger.setLevel(logging.INFO)
 
-    # 将日志级别设置为 INFO
-    transformers.utils.logging.set_verbosity_info()
-    log_level = training_args.get_process_log_level()
-    logger.setLevel(log_level)
-    datasets.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.enable_default_handler()
-    transformers.utils.logging.enable_explicit_format()
+    # 设置随机种子
+    set_seed(SEED)
 
-    # 训练整体情况记录
-    logger.warning(
-        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
-        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    # 1. 加载 Tokenizer
+    logger.info(f"加载 Tokenizer: {MODEL_NAME_OR_PATH}")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME_OR_PATH, trust_remote_code=True)
+
+    # 2. 加载模型
+    logger.info(f"加载模型: {MODEL_NAME_OR_PATH}")
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME_OR_PATH,
+        trust_remote_code=True,
+        device_map="auto",           # 自动分配设备
+        torch_dtype=torch.float16,   # 半精度，节省显存
+        low_cpu_mem_usage=True,      # 节省 CPU 内存
     )
-    logger.info(f"Training/evaluation parameters {training_args}")
 
-    # 检查 checkpoint
-    last_checkpoint = None
-    if os.path.isdir(training_args.output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
-            raise ValueError(
-                f"输出路径 ({training_args.output_dir}) 非空 "
-            )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
-                f"从 {last_checkpoint}恢复训练"
-            )
-
-    # 设置随机数种子.
-    set_seed(training_args.seed)
-
-    # 初始化模型
-    logger.warning("加载预训练模型")
-    logger.info(f"模型参数地址：{model_args.model_name_or_path}")
-    model = AutoModelForCausalLM.from_pretrained(model_args.model_name_or_path,trust_remote_code=True)
     n_params = sum({p.data_ptr(): p.numel() for p in model.parameters()}.values())
-    logger.info(f"继承一个预训练模型 - Total size={n_params/2**20:.2f}M params")
+    logger.info(f"模型参数量: {n_params / 2**20:.2f}M")
 
-    # 初始化 Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
-    logger.info("完成 tokenzier 加载")
+    # 3. 加载训练数据
+    logger.info(f"加载训练数据: {TRAIN_DATA_PATH}")
+    with open(TRAIN_DATA_PATH, 'r', encoding='utf-8') as f:
+        lst = [json.loads(line) for line in f.readlines()]
 
-    # 加载微调数据
-    with open(data_args.train_files) as f:
-        lst = [json.loads(line) for line in f.readlines()[:10000]]
-    logger.info("完成训练集加载")
-    logger.info(f"训练集地址：{data_args.train_files}")
-    logger.info(f'训练样本总数:{len(lst)}')
-    # logger.info(f"训练集采样：{ds["train"][0]}")
+    logger.info(f"训练样本总数: {len(lst)}")
 
-    train_dataset = SupervisedDataset(lst, tokenizer=tokenizer, max_len=2048)
-    
-    logger.info("初始化 Trainer")
+    # 4. 创建数据集
+    train_dataset = SupervisedDataset(lst, tokenizer=tokenizer, max_len=MAX_LEN)
+
+    # 5. 配置训练参数
+    training_args = TrainingArguments(
+        output_dir=OUTPUT_DIR,
+        per_device_train_batch_size=PER_DEVICE_TRAIN_BATCH_SIZE,
+        gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
+        logging_steps=LOGGING_STEPS,
+        num_train_epochs=NUM_TRAIN_EPOCHS,
+        save_steps=SAVE_STEPS,
+        learning_rate=LEARNING_RATE,
+        warmup_steps=WARMUP_STEPS,
+        report_to=REPORT_TO,
+        bf16=True,                     # 混合精度训练
+        # fp16=True,                     # 混合精度训练
+        gradient_checkpointing=True,   # 节省显存
+        save_total_limit=2,            # 只保留最近 2 个 checkpoint
+        logging_dir=os.path.join(OUTPUT_DIR, "logs"),
+        overwrite_output_dir=True,     # 覆盖输出目录
+        dataloader_num_workers=0,      # Windows 下避免多进程问题
+    )
+
+    logger.info(f"训练参数: {training_args}")
+
+    # 6. 创建 Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset= IterableWrapper(train_dataset),
-        tokenizer=tokenizer
+        train_dataset=train_dataset,
+        tokenizer=tokenizer,
+        data_collator=default_data_collator,
     )
 
-    # 从 checkpoint 加载
-    checkpoint = None
-    if training_args.resume_from_checkpoint is not None:
-        checkpoint = training_args.resume_from_checkpoint
-    elif last_checkpoint is not None:
-            checkpoint = last_checkpoint
+    # 7. 开始训练
+    logger.info("开始训练...")
+    train_result = trainer.train()
 
-    logger.info("开始训练")
-    train_result = trainer.train(resume_from_checkpoint=checkpoint)
-    trainer.save_model() 
+    # 8. 保存模型
+    trainer.save_model()
+    logger.info(f"模型已保存到: {OUTPUT_DIR}")
+
 
 if __name__ == "__main__":
     main()

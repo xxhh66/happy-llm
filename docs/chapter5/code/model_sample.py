@@ -39,9 +39,18 @@ class TextGenerator:
         # 加载模型检查点文件
         checkpoint_dict = torch.load(self.checkpoint, map_location=self.device)  # 加载模型参数 # 初始化模型参数
         self.model = Transformer(
+            # ModelConfig(
+            #     dim=1024,
+            #     n_layers=18,
+            #     pad_token_id=self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
+            # )
             ModelConfig(
-                dim=1024,
-                n_layers=18,
+                dim=256,
+                n_layers=4,
+                n_heads=4,
+                n_kv_heads=2,
+                vocab_size=6144,
+                max_seq_len=128,
                 pad_token_id=self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
             )
         )  # 实例化 Transformer 模型
@@ -139,7 +148,7 @@ if __name__ == "__main__":
         '<|im_start|>中国矿业大学（北京）地球科学与测绘工程学院',
     ]
 
-    generator = TextGenerator(checkpoint='./base_model_215M/pretrain_1024_18_6144.pth')  # 初始化生成器
+    generator = TextGenerator(checkpoint='./base_model_215M/pretrain_256_4_6144.pth')  # 初始化生成器
     for i in range(len(pretrain_prompt_datas)):
         samples = generator.pretrain_sample(start=pretrain_prompt_datas[i], num_samples=1, max_new_tokens=120, temperature=0.75)
         print(f"\nSample {i+1}:\n{pretrain_prompt_datas[i]}{samples[0]}\n{'-'*20}")  # 打印生成的样本并用分隔线分割
@@ -152,7 +161,7 @@ if __name__ == "__main__":
         "1+12等于多少？",
         "你是谁？"
     ]
-    generator = TextGenerator(checkpoint='./sft_model_215M/sft_dim1024_layers18_vocab_size6144.pth')  # 初始化生成器
+    generator = TextGenerator(checkpoint='./sft_model_215M/sft_dim256_layers4_vocab_size6144.pth')  # 初始化生成器
     for i in range(len(sft_prompt_datas)):
         samples = generator.sft_sample(start=sft_prompt_datas[i], num_samples=1, max_new_tokens=128, temperature=0.6)
         print(f"\nSample {i+1}:\nQuestion: {sft_prompt_datas[i]} \nAI answer: {samples[0]}\n{'-'*20}")  # 打印生成的样本并用分隔线分割

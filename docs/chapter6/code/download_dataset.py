@@ -9,5 +9,9 @@ from tqdm import tqdm
 
 # 设置环境变量
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
-# 下载SFT数据集
-os.system(f'huggingface-cli download --repo-type dataset --resume-download BelleGroup/train_3.5M_CN --local-dir ./autodl-tmp/dataset/sft_data/BelleGroup')
+# 下载SFT数据集,
+# os.system(f'huggingface-cli download --repo-type dataset --resume-download BelleGroup/train_3.5M_CN --local-dir ./BelleGroup')
+
+# 使用原始字符串，避免反斜杠转义
+# os.system(r'huggingface-cli download --repo-type dataset --resume-download BelleGroup/train_3.5M_CN --local-dir D:/workspace/deeplearning/d2cv/happy-llm/docs/dataset/BelleGroup')
+os.system(r'hf download --repo-type dataset BelleGroup/train_3.5M_CN --local-dir D:/workspace/deeplearning/d2cv/happy-llm/docs/dataset/BelleGroup')

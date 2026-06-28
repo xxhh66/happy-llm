@@ -223,7 +223,7 @@ if __name__ == "__main__":
     
     # 基础训练参数
     parser.add_argument("--out_dir", type=str, default="base_model_215M", help="模型输出目录")
-    parser.add_argument("--epochs", type=int, default=1, help="训练轮数")
+    parser.add_argument("--epochs", type=int, default=10, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=64, help="批次大小")
     parser.add_argument("--learning_rate", type=float, default=2e-4, help="学习率")
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu", help="训练设备")
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     
     # 日志和保存参数
     parser.add_argument("--log_interval", type=int, default=100, help="日志记录间隔")
-    parser.add_argument("--save_interval", type=int, default=1000, help="模型保存间隔")
+    parser.add_argument("--save_interval", type=int, default=300, help="模型保存间隔")
     
     # 多GPU训练参数
     parser.add_argument("--gpus", type=str, default='0,1,2,3,4,5,6,7', help="使用的GPU ID，用逗号分隔 (例如: '0,1,2')")
@@ -268,10 +268,19 @@ if __name__ == "__main__":
         )
 
     # ==================== 模型配置 ====================
-    # 定义语言模型的配置参数
+    # 定义语言模型的配置参数 215M
+    # lm_config = ModelConfig(
+    #     dim=1024,      # 模型维度
+    #     n_layers=18,   # Transformer层数
+    # )
+
     lm_config = ModelConfig(
-        dim=1024,      # 模型维度
-        n_layers=18,   # Transformer层数
+        dim=256,
+        n_layers=4,
+        n_heads=4,
+        n_kv_heads=2,
+        vocab_size=6144,
+        max_seq_len=128,
     )
 
     # ==================== 训练环境设置 ====================
@@ -286,7 +295,7 @@ if __name__ == "__main__":
     
     # 确定设备类型（用于选择合适的上下文管理器）
     device_type = "cuda" if "cuda" in args.device else "cpu"
-
+    print(f"设备类型{device_type}")
     # 设置混合精度训练的上下文管理器
     # CPU训练时使用nullcontext，GPU训练时使用autocast
     ctx = nullcontext() if device_type == "cpu" else torch.cuda.amp.autocast()
